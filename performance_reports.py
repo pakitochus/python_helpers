@@ -19,16 +19,18 @@ def structConfMat(confmat, index=0):
         Dataframe with all classification performance metrics.
 
     """
-    conf = np.sum(confmat,axis=0)
     intdim = int(np.sqrt(confmat.shape[1]))
-    conf = conf.reshape((intdim,intdim))
-    N = np.float(np.sum(conf))
-    cr = sum(np.diag(conf))/N
-    crstd= (1.*np.sum(confmat[:,[0,-1]],axis=1)/np.sum(confmat,axis=1)).std()
-    aux = 1.*confmat[:,[0,-1]]/np.vstack((np.sum(confmat[:,[0,2]],axis=1),np.sum(confmat[:,[1,3]],axis=1))).T
+    conf_n = confmat.reshape((len(confmat), intdim, intdim))
+    conf = np.sum(conf_n,axis=0)
+    corrects = conf_n.transpose(2,1,0).reshape((-1,len(conf_n)))[::(intdim+1)]
+    corrects = corrects.sum(axis=0)
+    n_folds = conf_n.sum(axis=1).sum(axis=1)
+    cr = np.mean(corrects/n_folds)
+    crstd= np.std(corrects/n_folds)
     
     performance = pd.DataFrame({'CorrectRate': cr, 'ErrorRate': 1-cr, 'CRstd': crstd}, index=[index])
     if confmat.shape[1]==4:
+        aux = 1.*confmat[:,[0,-1]]/np.vstack((np.sum(confmat[:,[0,2]],axis=1),np.sum(confmat[:,[1,3]],axis=1))).T
         sens = conf[1,-1]/np.sum(conf[-1])
         sensstd = np.nanstd(aux[:,-1])
         spec = conf[0,0]/np.sum(conf[0])
@@ -41,8 +43,8 @@ def structConfMat(confmat, index=0):
     else:
         b_acc = 0
         for ix in range(conf.shape[1]):
-            fila = conf[ix]
-            auxacc = fila[ix]/fila.sum()
+            aux_n = conf_n[:,:,ix]
+            auxacc = np.nanmean(aux_n[:,ix]/aux_n.sum(axis=1))
             auxperf = pd.DataFrame({f'Class_{ix}': auxacc}, index=[index])
             b_acc += auxacc
             performance = pd.concat((performance, auxperf),axis=1)
