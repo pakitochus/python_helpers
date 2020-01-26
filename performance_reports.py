@@ -43,7 +43,7 @@ def structConfMat(confmat, index=0):
     else:
         b_acc = 0
         for ix in range(conf.shape[1]):
-            aux_n = conf_n[:,:,ix]
+            aux_n = conf_n[:,ix]
             auxacc = np.nanmean(aux_n[:,ix]/aux_n.sum(axis=1))
             auxperf = pd.DataFrame({f'Class_{ix}': auxacc}, index=[index])
             b_acc += auxacc
