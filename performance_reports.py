@@ -25,6 +25,9 @@ def structConfMat(confmat, index=0, multiple=False):
         Example for latex tables:
             print(structConfMat(confmat,multiple=False)
             .to_latex(float_format="{0.real:.3} [{0.imag:.2}]".format))
+            
+        Note: for coonverting multiple performance to average/std use
+            (performance.mean() + 1j*performance.std()).to_frame().T
     """
     
     intdim = int(np.sqrt(confmat.shape[1]))
@@ -40,23 +43,13 @@ def structConfMat(confmat, index=0, multiple=False):
         
     b_acc = np.nanmean(aux_n, axis=1)
         
-    if multiple:
-        performance = pd.DataFrame({'CorrectRate': cr, 'ErrorRate': 1-cr,
-                                    'balAcc': b_acc}, 
-                                   index=index+np.arange(confmat.shape[0]))
-        for ix in range(aux_n.shape[1]):
-            auxperf = pd.DataFrame({f'Class_{ix}': aux_n[:,ix]}, 
-                                   index=index+np.arange(confmat.shape[0]))
-            performance = pd.concat((performance, auxperf),axis=1)
-    else:
-        performance = pd.DataFrame({'CorrectRate': np.nanmean(cr)+1j*np.nanstd(cr), 
-                                    'ErrorRate': np.nanmean(1-cr)+1j*np.nanstd(1-cr), 
-                                    'balAcc': np.nanmean(b_acc)+1j*np.nanstd(b_acc)}, 
-                                    index=[index])
-        for ix in range(aux_n.shape[1]):
-            auxperf = pd.DataFrame({f'Class_{ix}': np.nanmean(aux_n)+1j*np.nanstd(aux_n)}, 
-                                   index=[index])
-            performance = pd.concat((performance, auxperf),axis=1)
+    performance = pd.DataFrame({'CorrectRate': cr, 'ErrorRate': 1-cr,
+                                'balAcc': b_acc}, 
+                               index=index+np.arange(confmat.shape[0]))
+    for ix in range(aux_n.shape[1]):
+        auxperf = pd.DataFrame({f'Class_{ix}': aux_n[:,ix]}, 
+                               index=index+np.arange(confmat.shape[0]))
+        performance = pd.concat((performance, auxperf),axis=1)
         
     if intdim==2:
         columns = performance.columns.tolist()
@@ -65,13 +58,12 @@ def structConfMat(confmat, index=0, multiple=False):
         performance.columns = columns
         prec = aux_n[:,1]/(aux_n[:,1]+1-aux_n[:,0])
         f1 = 2*prec*aux_n[:,1]/(prec+aux_n[:,1])
-        if multiple:
-            performance['Precision'] = prec
-            performance['F1'] = f1
-        else:
-            performance['Precision'] = np.nanmean(prec)+1j*np.nanstd(prec)
-            performance['F1'] =np.nanmean(f1)+1j*np.nanstd(f1)
+        performance['Precision'] = prec
+        performance['F1'] = f1
+
         
+    if multiple:
+        performance = (performance.mean() + 1j*performance.std()).to_frame().T
     return performance
 
 
