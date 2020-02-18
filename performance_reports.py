@@ -63,7 +63,8 @@ def structConfMat(confmat, index=0, multiple=False):
 
         
     if multiple:
-        performance = (performance.mean() + 1j*performance.std()).to_frame().T
+        performance = (performance.mean(skipna=True) 
+                       + 1j*performance.std(skipna=True)).to_frame().T
     return performance
 
 
