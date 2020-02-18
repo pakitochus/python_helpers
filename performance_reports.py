@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-def structConfMat(confmat, index=0):
+def structConfMat(confmat, index=0, multiple=False):
     """
     Creates a pandas dataframe from the confusion matrix. It distinguishes
     between binary and multi-class classification. 
@@ -12,43 +12,66 @@ def structConfMat(confmat, index=0):
         Array with n rows, each of one being a flattened confusion matrix.
     index : INT, optional
         Integer for index of the dataframe. The default is 0.
+    multiple : BOOL, optional
+        If True, returns metrics per CV fold. If False, returns mean and std
+        of the metric over all folds (in complex format).
 
     Returns
     -------
     performance : pd.DataFrame
         Dataframe with all classification performance metrics.
-
+        Use "{0.real:.3} [{0.imag:.2}]".format to display float_format in latex
+        
+        Example for latex tables:
+            print(structConfMat(confmat,multiple=False)
+            .to_latex(float_format="{0.real:.3} [{0.imag:.2}]".format))
     """
+    
     intdim = int(np.sqrt(confmat.shape[1]))
     conf_n = confmat.reshape((len(confmat), intdim, intdim))
-    conf = np.sum(conf_n,axis=0)
     corrects = conf_n.transpose(2,1,0).reshape((-1,len(conf_n)))[::(intdim+1)]
     corrects = corrects.sum(axis=0)
     n_folds = conf_n.sum(axis=1).sum(axis=1)
-    cr = np.mean(corrects/n_folds)
-    crstd= np.std(corrects/n_folds)
+    cr = corrects/n_folds
     
-    performance = pd.DataFrame({'CorrectRate': cr, 'ErrorRate': 1-cr, 'CRstd': crstd}, index=[index])
-    if confmat.shape[1]==4:
-        aux = 1.*confmat[:,[0,-1]]/np.vstack((np.sum(confmat[:,[0,2]],axis=1),np.sum(confmat[:,[1,3]],axis=1))).T
-        sens = conf[1,-1]/np.sum(conf[-1])
-        sensstd = np.nanstd(aux[:,-1])
-        spec = conf[0,0]/np.sum(conf[0])
-        specstd = np.nanstd(aux[:,])
-        precision = sens/(sens+1-spec)
-        f1 = 2*precision*sens/(precision+sens)
-        b_acc = (sens+spec)/2
-        auxperf = pd.DataFrame({'Sensitivity': sens, 'SensSTD': sensstd, 'Specificity': spec, 'SpecSTD': specstd, 'Precision':precision, 'f1':f1, 'balAcc':b_acc}, index=[index])
-        performance = pd.concat((performance, auxperf), axis=1)
-    else:
-        b_acc = 0
-        for ix in range(conf.shape[1]):
-            aux_n = conf_n[:,ix]
-            auxacc = np.nanmean(aux_n[:,ix]/aux_n.sum(axis=1))
-            auxperf = pd.DataFrame({f'Class_{ix}': auxacc}, index=[index])
-            b_acc += auxacc
+    aux_n = conf_n[:,0][:,0]/conf_n[:,0].sum(axis=1)
+    for ix in range(intdim-1):
+        aux_n = np.c_[aux_n, conf_n[:,ix+1][:,ix+1]/conf_n[:,ix+1].sum(axis=1)]
+        
+    b_acc = np.nanmean(aux_n, axis=1)
+        
+    if multiple:
+        performance = pd.DataFrame({'CorrectRate': cr, 'ErrorRate': 1-cr,
+                                    'balAcc': b_acc}, 
+                                   index=index+np.arange(confmat.shape[0]))
+        for ix in range(aux_n.shape[1]):
+            auxperf = pd.DataFrame({f'Class_{ix}': aux_n[:,ix]}, 
+                                   index=index+np.arange(confmat.shape[0]))
             performance = pd.concat((performance, auxperf),axis=1)
-        performance['balAcc'] = b_acc/ix
+    else:
+        performance = pd.DataFrame({'CorrectRate': np.nanmean(cr)+1j*np.nanstd(cr), 
+                                    'ErrorRate': np.nanmean(1-cr)+1j*np.nanstd(1-cr), 
+                                    'balAcc': np.nanmean(b_acc)+1j*np.nanstd(b_acc)}, 
+                                    index=[index])
+        for ix in range(aux_n.shape[1]):
+            auxperf = pd.DataFrame({f'Class_{ix}': np.nanmean(aux_n)+1j*np.nanstd(aux_n)}, 
+                                   index=[index])
+            performance = pd.concat((performance, auxperf),axis=1)
+        
+    if intdim==2:
+        columns = performance.columns.tolist()
+        columns[columns.index('Class_0')]='Sensitivity'
+        columns[columns.index('Class_1')]='Specificity'
+        performance.columns = columns
+        prec = aux_n[:,1]/(aux_n[:,1]+1-aux_n[:,0])
+        f1 = 2*prec*aux_n[:,1]/(prec+aux_n[:,1])
+        if multiple:
+            performance['Precision'] = prec
+            performance['F1'] = f1
+        else:
+            performance['Precision'] = np.nanmean(prec)+1j*np.nanstd(prec)
+            performance['F1'] =np.nanmean(f1)+1j*np.nanstd(f1)
+        
     return performance
 
 
