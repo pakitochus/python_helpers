@@ -5,7 +5,14 @@ def structConfMat(confmat, index=0, multiple=False):
     """
     Creates a pandas dataframe from the confusion matrix. It distinguishes
     between binary and multi-class classification. 
-
+    
+    TODO: especificar formato exacto: corregir: ytrue - eje x, ypred - eje y. 
+    
+    [[172  88  81   6]
+    [ 12  65  66   2]
+    [  9 272 615  27]
+    [  0   0   0   0]]
+    
     Parameters
     ----------
     confmat : numpy.ndarray
@@ -37,9 +44,9 @@ def structConfMat(confmat, index=0, multiple=False):
     n_folds = conf_n.sum(axis=1).sum(axis=1)
     cr = corrects/n_folds
     
-    aux_n = conf_n[:,0][:,0]/conf_n[:,0].sum(axis=1)
+    aux_n = conf_n[:,:,0][:,0]/conf_n[:,:,0].sum(axis=1)
     for ix in range(intdim-1):
-        aux_n = np.c_[aux_n, conf_n[:,ix+1][:,ix+1]/conf_n[:,ix+1].sum(axis=1)]
+        aux_n = np.c_[aux_n, conf_n[:,:,ix+1][:,ix+1]/conf_n[:,:,ix+1].sum(axis=1)]
         
     b_acc = np.nanmean(aux_n, axis=1)
         
