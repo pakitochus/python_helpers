@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
+from sklearn.metrics import confusion_matrix
 
-def structConfMat(confmat, index=0, multiple=False):
+def structConfMat(confmat, index=0, multiple=False, useratio=False):
     """
     Creates a pandas dataframe from the confusion matrix. It distinguishes
     between binary and multi-class classification. 
@@ -44,9 +45,9 @@ def structConfMat(confmat, index=0, multiple=False):
     n_folds = conf_n.sum(axis=1).sum(axis=1)
     cr = corrects/n_folds
     
-    aux_n = conf_n[:,:,0][:,0]/conf_n[:,:,0].sum(axis=1)
+    aux_n = conf_n[:,0][:,0]/conf_n[:,0].sum(axis=1)
     for ix in range(intdim-1):
-        aux_n = np.c_[aux_n, conf_n[:,:,ix+1][:,ix+1]/conf_n[:,:,ix+1].sum(axis=1)]
+        aux_n = np.c_[aux_n, conf_n[:,ix+1][:,ix+1]/conf_n[:,ix+1].sum(axis=1)]
         
     b_acc = np.nanmean(aux_n, axis=1)
         
@@ -60,8 +61,8 @@ def structConfMat(confmat, index=0, multiple=False):
         
     if intdim==2:
         columns = performance.columns.tolist()
-        columns[columns.index('Class_0')]='Sensitivity'
-        columns[columns.index('Class_1')]='Specificity'
+        columns[columns.index('Class_0')]='Specificity'
+        columns[columns.index('Class_1')]='Sensitivity'
         performance.columns = columns
         prec = aux_n[:,1]/(aux_n[:,1]+1-aux_n[:,0])
         f1 = 2*prec*aux_n[:,1]/(prec+aux_n[:,1])
@@ -70,8 +71,12 @@ def structConfMat(confmat, index=0, multiple=False):
 
         
     if multiple==False:
-        performance = (performance.mean(skipna=True) 
-                       + 1j*performance.std(skipna=True)).to_frame().T
+        if useratio:
+            performance['ratio'] = confmat.sum(axis=1)/confmat.sum()
+            performance = (performance.T*performance['ratio']).T.sum()
+        else:
+            performance = (performance.mean(skipna=True) 
+                        + 1j*performance.std(skipna=True)).to_frame().T
     return performance
 
 
@@ -110,3 +115,31 @@ def regressionMetrics(predicted, originals, index=0):
                                 'RMSE': np.mean(RMSE), 'RMSE (STD)': np.std(RMSE)}, 
                                index=[index])
     return performance
+
+def test_structconfmat():
+    """test structconfmat
+    sklearn confusion_matrix gives:
+                y_pred
+    y_true  [[tn, fp],
+             [fn, tp]]
+    """
+    change=3
+    y_true = [[0]*3+[1]*5,
+              [0]*4+[1]*4,
+              [0]*3+[1]*3]
+    y_pred = [el[:] for el in y_true]
+    cmat = []
+    for ix in range(len(y_pred)):
+        y_pred[ix][change] = (y_pred[ix][change]+1)%2
+        cmat.append(confusion_matrix(y_true[ix], y_pred[ix]).reshape((-1)))
+    cmat = np.array(cmat)
+    tn, fp, fn, tp = cmat.sum(axis=0)
+    df = structConfMat(cmat)
+    assert df['Specificity'].values[0].real==tn/(tn+fp)
+    assert df['Sensitivity'].values[0].real==tp/(tp+fn)
+
+def test_multiclass():
+    pass
+
+if __name__ == '__main__':
+    test_structconfmat()
